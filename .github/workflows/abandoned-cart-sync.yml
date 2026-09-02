@@ -2,23 +2,31 @@ name: Abandoned cart sync
 
 on:
   schedule:
-    # Every 5 minutes - GitHub's shortest allowed interval. The scheduler is
-    # best-effort on shared runners, so a run can be a few minutes late; harmless
-    # here, anything missed is picked up on the next pass.
+    # GitHub's cron is best-effort - on shared runners a "*/5" schedule is often
+    # delayed by 10-40 minutes, and single ticks get dropped entirely. So the cron
+    # is only the *starter*: each run then syncs every 5 minutes on its own for
+    # nearly an hour (see LOOP_ITERATIONS below). Whichever cron tick actually
+    # lands supersedes the previous loop, so the cadence stays 5 minutes either way.
     - cron: "*/5 * * * *"
-  workflow_dispatch:        # lets you run it by hand from the Actions tab
+  push:
+    branches: [main]          # a fresh loop starts as soon as anything is pushed
+  workflow_dispatch:
 
 concurrency:
   group: abandoned-cart-sync
-  cancel-in-progress: false  # never let two runs assign the same lead twice
+  cancel-in-progress: true    # a newer run replaces the running loop, never stacks
 
 permissions:
-  contents: write            # to commit state/state.json back
+  contents: write             # to commit state/state.json back
+
+env:
+  LOOP_ITERATIONS: 11         # 11 syncs, 5 minutes apart -> ~55 minutes of cover
+  LOOP_SLEEP_SECONDS: 300
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -31,27 +39,38 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Sync abandoned carts to the sales sheets
+      - name: Sync every 5 minutes for the next hour
         env:
           SHOPIFY_STORE_URL: ${{ secrets.SHOPIFY_STORE_URL }}
           SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python main.py
-
-      - name: Save rotation state
-        if: always()
         run: |
-          if [[ -z "$(git status --porcelain state/state.json)" ]]; then
-            echo "State unchanged."
-            exit 0
-          fi
           git config user.name  "abandoned-cart-bot"
           git config user.email "actions@github.com"
-          git add state/state.json
-          git commit -m "chore: rotation state $(date -u +'%Y-%m-%d %H:%M UTC') [skip ci]"
-          for attempt in 1 2 3; do
-            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push && exit 0
-            echo "Push attempt $attempt failed, retrying..."
-            sleep 5
+
+          save_state() {
+            if [[ -z "$(git status --porcelain state/state.json)" ]]; then
+              return 0
+            fi
+            git add state/state.json
+            git commit -q -m "chore: rotation state $(date -u +'%Y-%m-%d %H:%M UTC') [skip ci]"
+            for attempt in 1 2 3; do
+              if git pull -q --rebase --autostash origin "${GITHUB_REF_NAME}" && git push -q; then
+                echo "State saved."
+                return 0
+              fi
+              echo "Push attempt $attempt failed, retrying..."
+              sleep 5
+            done
+            echo "::warning::Could not push state.json; the next run may re-check recent carts."
+          }
+
+          for i in $(seq 1 "${LOOP_ITERATIONS}"); do
+            echo "::group::Sync $i/${LOOP_ITERATIONS} at $(date -u +'%H:%M:%S UTC')"
+            python main.py || echo "::warning::Sync $i failed; will try again next tick."
+            save_state
+            echo "::endgroup::"
+            if [[ "$i" -lt "${LOOP_ITERATIONS}" ]]; then
+              sleep "${LOOP_SLEEP_SECONDS}"
+            fi
           done
-          echo "::warning::Could not push state.json; the next run may re-check recent carts."
