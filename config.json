@@ -1,0 +1,22 @@
+{
+  "_comment": "Sales reps get abandoned-cart leads strictly in turn: 1st lead -> reps[0], 2nd -> reps[1], 3rd -> reps[0] ... Add or remove a rep here and rotation adapts automatically.",
+  "reps": [
+    {
+      "name": "Suman",
+      "sheet_id": "1lj955aJu-m58Zx1I62lJPVY4kuMp9g1VOpGWzH0WMDA",
+      "worksheet": "Leads"
+    },
+    {
+      "name": "Priyanka",
+      "sheet_id": "1NgUWagp6S55oP7b-6sI7lrpM5WvHLsHNMCmOWND_L8k",
+      "worksheet": "Leads"
+    }
+  ],
+
+  "timezone": "Asia/Kolkata",
+
+  "min_age_minutes": 30,
+  "lookback_days": 7,
+  "require_contact": true,
+  "max_leads_per_run": 200
+}

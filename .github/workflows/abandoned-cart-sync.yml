@@ -1,0 +1,57 @@
+name: Abandoned cart sync
+
+on:
+  schedule:
+    # Every 5 minutes - GitHub's shortest allowed interval. The scheduler is
+    # best-effort on shared runners, so a run can be a few minutes late; harmless
+    # here, anything missed is picked up on the next pass.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:        # lets you run it by hand from the Actions tab
+
+concurrency:
+  group: abandoned-cart-sync
+  cancel-in-progress: false  # never let two runs assign the same lead twice
+
+permissions:
+  contents: write            # to commit state/state.json back
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Sync abandoned carts to the sales sheets
+        env:
+          SHOPIFY_STORE_URL: ${{ secrets.SHOPIFY_STORE_URL }}
+          SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python main.py
+
+      - name: Save rotation state
+        if: always()
+        run: |
+          if [[ -z "$(git status --porcelain state/state.json)" ]]; then
+            echo "State unchanged."
+            exit 0
+          fi
+          git config user.name  "abandoned-cart-bot"
+          git config user.email "actions@github.com"
+          git add state/state.json
+          git commit -m "chore: rotation state $(date -u +'%Y-%m-%d %H:%M UTC') [skip ci]"
+          for attempt in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push && exit 0
+            echo "Push attempt $attempt failed, retrying..."
+            sleep 5
+          done
+          echo "::warning::Could not push state.json; the next run may re-check recent carts."

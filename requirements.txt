@@ -1,0 +1,5 @@
+requests==2.32.3
+gspread==6.1.4
+google-auth==2.35.0
+python-dotenv==1.0.1
+tzdata==2024.2
