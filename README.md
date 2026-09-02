@@ -16,12 +16,13 @@ turn order survives across runs, restarts, and months of downtime.
 
 ## What each rep sees
 
-| Assigned At | Assigned To | Checkout ID | Checkout | Abandoned At | Customer Name | Email | Phone | City | State | Country | Products | Items | Cart Value | Currency | Recovery Link | Call Status | Remarks |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Date (IST) | Name | Phone | Email | Total (Rs) | Checkout Link |
+|---|---|---|---|---|---|
 
-`Recovery Link` is Shopify's own checkout-recovery URL — the rep can send it to the
-customer and the cart comes back exactly as it was. `Call Status` and `Remarks` are left
-empty for the rep to fill in; the script never touches existing rows.
+`Date (IST)` is when the cart was abandoned. `Checkout Link` is Shopify's own
+recovery URL - the rep can open it to see exactly what was in the cart, or send it to
+the customer so the cart comes back intact. The script only ever appends; it never
+touches a row that is already there, so reps can add their own notes in columns G+.
 
 ---
 
@@ -139,7 +140,7 @@ After that it runs itself every 5 minutes.
 | Setting | Default | Meaning |
 |---|---|---|
 | `reps` | Suman, Priyanka | Rotation order. Add a third person and it becomes a 3-way rotation automatically. |
-| `min_age_minutes` | `30` | How long a checkout must sit untouched before it counts as abandoned. Stops a rep phoning someone who is still typing their card number. |
+| `min_age_minutes` | `5` | How long a checkout must sit untouched before it counts as abandoned. Stops a rep phoning someone who is still typing their card number. |
 | `lookback_days` | `7` | How far back each run looks. Bigger = more safety net if the workflow was paused. |
 | `require_contact` | `true` | Skip carts with neither email nor phone (a rep can't do anything with them). Set `false` to capture everything. |
 | `timezone` | `Asia/Kolkata` | Timezone for the timestamps written into the sheets. |
@@ -155,9 +156,9 @@ repo **public** (Actions is free and unlimited there — the token and the Googl
 in encrypted secrets, so nothing sensitive is exposed) or keep it private and raise the
 interval to `*/30`, which fits inside the free tier.
 
-Note that `min_age_minutes` also caps how fast a lead can appear: at the default `30`,
-polling every 5 minutes still means a cart surfaces ~30 minutes after it was abandoned.
-Lower it to `10`–`15` if you want the team on the phone sooner.
+Note that `min_age_minutes` also caps how fast a lead can appear: at `min_age_minutes: 5`,
+a cart surfaces ~5-10 minutes after it was abandoned. Raise it to `15` if reps end up
+calling customers who were still completing a slow UPI or bank-OTP payment.
 
 ---
 
@@ -166,7 +167,7 @@ Lower it to `10`–`15` if you want the team on the phone sooner.
 Two independent guards, so a lead is never sent twice:
 
 1. `state/state.json` remembers every checkout ID already assigned (60 days).
-2. Before writing, the script reads the `Checkout ID` column from both sheets and skips
+2. Before writing, the script reads the `Checkout Link` column from both sheets and skips
    anything already there — so even if the state file were deleted, nothing repeats.
 
 If the sheet write fails, the checkout is **not** marked as processed, so the next run

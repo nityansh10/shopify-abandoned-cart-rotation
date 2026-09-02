@@ -15,30 +15,19 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.file",
 ]
 
-# Column order written to every rep's sheet. "Call Status" and "Remarks" are left
-# blank on purpose - that is where the rep works.
+# Column order written to every rep's sheet.
 COLUMNS = [
-    "Assigned At",
-    "Assigned To",
-    "Checkout ID",
-    "Checkout",
-    "Abandoned At",
-    "Customer Name",
-    "Email",
+    "Date (IST)",
+    "Name",
     "Phone",
-    "City",
-    "State",
-    "Country",
-    "Products",
-    "Items",
-    "Cart Value",
-    "Currency",
-    "Recovery Link",
-    "Call Status",
-    "Remarks",
+    "Email",
+    "Total (Rs)",
+    "Checkout Link",
 ]
 
-CHECKOUT_ID_COL = COLUMNS.index("Checkout ID") + 1  # 1-based, for gspread
+# The recovery link carries a unique key per checkout, so it doubles as the
+# duplicate check without needing a separate ID column in the sheet.
+CHECKOUT_LINK_COL = COLUMNS.index("Checkout Link") + 1  # 1-based, for gspread
 
 
 class SheetsError(RuntimeError):
@@ -128,13 +117,13 @@ class SheetsClient:
         return ws
 
     @staticmethod
-    def existing_checkout_ids(ws):
-        """Checkout IDs already present in the sheet - a safety net against duplicates
-        if state.json is ever lost or reset."""
+    def existing_checkout_links(ws):
+        """Checkout links already in the sheet - a safety net against duplicates if
+        state.json is ever lost or reset."""
         try:
-            values = ws.col_values(CHECKOUT_ID_COL)[1:]  # skip header
+            values = ws.col_values(CHECKOUT_LINK_COL)[1:]  # skip header
         except gspread.exceptions.APIError as exc:
-            log.warning("Could not read existing IDs from %s: %s", ws.title, exc)
+            log.warning("Could not read existing links from %s: %s", ws.title, exc)
             return set()
         return {v.strip() for v in values if v and v.strip()}
 

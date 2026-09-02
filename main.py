@@ -77,24 +77,12 @@ def local(dt, tz):
 def build_row(lead, rep_name, tz, now):
     """One sheet row, in COLUMNS order."""
     row = [
-        local(now, tz),
-        rep_name,
-        lead["checkout_id"],
-        lead["name"],
-        local(parse_shopify_time(lead["created_at"]), tz),
+        local(parse_shopify_time(lead["created_at"]), tz),  # when the cart was abandoned
         lead["customer_name"],
-        lead["email"],
         lead["phone"],
-        lead["city"],
-        lead["province"],
-        lead["country"],
-        lead["items"],
-        lead["item_count"],
+        lead["email"],
         lead["total_price"],
-        lead["currency"],
         lead["recovery_url"],
-        "",  # Call Status - for the rep
-        "",  # Remarks    - for the rep
     ]
     assert len(row) == len(COLUMNS), "build_row is out of sync with COLUMNS"
     return row
@@ -109,7 +97,7 @@ def select_new_leads(leads, cfg, state, already_in_sheets, now):
         checkout_id = lead["checkout_id"]
         if not checkout_id:
             continue
-        if state.is_processed(checkout_id) or checkout_id in already_in_sheets:
+        if state.is_processed(checkout_id) or lead["recovery_url"] in already_in_sheets:
             skipped["seen"] += 1
             continue
         if lead.get("completed_at"):
@@ -173,7 +161,7 @@ def main():
         for rep in reps:
             ws = sheets.worksheet(rep["sheet_id"], rep.get("worksheet", "Leads"))
             worksheets[rep["name"]] = ws
-            already_in_sheets |= sheets.existing_checkout_ids(ws)
+            already_in_sheets |= sheets.existing_checkout_links(ws)
     else:
         log.info("DRY_RUN: skipping Google Sheets entirely (no duplicate check against them).")
 

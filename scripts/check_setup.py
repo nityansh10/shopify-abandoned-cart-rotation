@@ -60,7 +60,7 @@ def main():
                 continue
             try:
                 ws = sheets.worksheet(sheet_id, rep.get("worksheet", "Leads"))
-                existing = sheets.existing_checkout_ids(ws)
+                existing = sheets.existing_checkout_links(ws)
                 print("{} {:<10} '{}' tab reachable, {} lead(s) already in it".format(
                     OK, name, ws.title, len(existing)))
             except SheetsError as exc:
